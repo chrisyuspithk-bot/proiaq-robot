@@ -17,13 +17,14 @@ from loguru import logger
 @dataclass
 class BrowserConfig:
     """Configuration for browser instances."""
-    mode: str = "local"           # "local" or "cloud"
+    engine: str = "browser-use"   # "browser-use" or "playwright"
+    mode: str = "local"           # "local" or "cloud" (browser-use only)
     headed: bool = False
     profile_dir: str = "./data/profiles"
     default_timeout: int = 30
     human_delay_min: float = 1.0
     human_delay_max: float = 3.0
-    api_key: str = ""
+    api_key: str = ""             # Browser Use Cloud API key
 
 
 @dataclass
@@ -293,3 +294,82 @@ async def run_browser_task(task: str, config: BrowserConfig,
                 await browser.close()
             except Exception:
                 pass
+
+
+# ── Unified dispatch ─────────────────────────────────────────────
+
+async def search_platform(platform: str, keyword: str, config: BrowserConfig,
+                          max_posts: int = 3, max_age_hours: int = 48,
+                          llm_api_key: str = "", llm_base_url: str = "",
+                          llm_model: str = "") -> list[dict]:
+    """Search a platform for posts — dispatches to browser-use or Playwright."""
+
+    if config.engine == "playwright":
+        from src.playwright_engine import PlaywrightConfig, PlaywrightEngine
+        pw_config = PlaywrightConfig(
+            headed=config.headed,
+            profile_dir=config.profile_dir,
+            human_delay_min=config.human_delay_min,
+            human_delay_max=config.human_delay_max,
+            llm_api_key=llm_api_key,
+            llm_base_url=llm_base_url,
+            llm_model=llm_model,
+        )
+        engine = PlaywrightEngine(pw_config)
+        return await engine.search(platform, keyword, max_posts, max_age_hours)
+
+    # browser-use path
+    client = BrowserUseClient(config)
+    task = client.build_search_task(platform, keyword, max_posts, max_age_hours)
+    raw = await run_browser_task(
+        task=task, config=config, platform=platform,
+        llm_api_key=llm_api_key, llm_base_url=llm_base_url, llm_model=llm_model,
+    )
+    return _parse_browser_use_result(raw, platform)
+
+
+async def post_reply_engine(platform: str, post_url: str, reply_text: str,
+                            config: BrowserConfig,
+                            llm_api_key: str = "", llm_base_url: str = "",
+                            llm_model: str = "") -> str:
+    """Post a reply — dispatches to browser-use or Playwright."""
+
+    if config.engine == "playwright":
+        from src.playwright_engine import PlaywrightConfig, PlaywrightEngine
+        pw_config = PlaywrightConfig(
+            headed=config.headed,
+            profile_dir=config.profile_dir,
+            human_delay_min=config.human_delay_min,
+            human_delay_max=config.human_delay_max,
+            llm_api_key=llm_api_key,
+            llm_base_url=llm_base_url,
+            llm_model=llm_model,
+        )
+        engine = PlaywrightEngine(pw_config)
+        return await engine.post_reply(platform, post_url, reply_text)
+
+    # browser-use path
+    client = BrowserUseClient(config)
+    task = client.build_reply_task(platform, post_url, reply_text)
+    return await run_browser_task(
+        task=task, config=config, platform=platform,
+        llm_api_key=llm_api_key, llm_base_url=llm_base_url, llm_model=llm_model,
+    )
+
+
+def _parse_browser_use_result(raw: str, platform: str) -> list[dict]:
+    """Parse browser-use final_result into structured posts."""
+    import json as _json
+    if not raw:
+        return []
+    try:
+        start = raw.find("[")
+        end = raw.rfind("]") + 1
+        if start >= 0 and end > start:
+            posts = _json.loads(raw[start:end])
+            for p in posts:
+                p["platform"] = platform
+            return posts
+    except (_json.JSONDecodeError, ValueError):
+        pass
+    return []

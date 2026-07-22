@@ -50,6 +50,7 @@ def _merge_env_overrides(config: dict) -> dict:
             "model": os.getenv("LLM_MODEL"),
         },
         "browser": {
+            "engine": os.getenv("BROWSER_ENGINE"),
             "mode": os.getenv("BROWSER_USE_MODE"),
             "headed": os.getenv("BROWSER_HEADED"),
             "profile_dir": os.getenv("CHROME_PROFILE_DIR"),

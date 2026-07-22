@@ -132,7 +132,8 @@ python main.py --status
 | `limits` | `max_posts_per_platform` | Posts to process per platform per run | `3` |
 | `limits` | `post_max_age_hours` | Max post age for hourly mode | `48` |
 | `limits` | `post_max_age_days` | Max post age for daily mode | `7` |
-| `browser` | `mode` | `local` or `cloud` | `local` |
+| `browser` | `engine` | `playwright` or `browser-use` | `playwright` |
+| `browser` | `mode` | `local` or `cloud` (browser-use only) | `local` |
 | `browser` | `headed` | Show browser window | `false` |
 | `dry_run` | — | Extract + generate, don't post | `false` |
 
@@ -140,6 +141,40 @@ python main.py --status
 
 Bilingual keyword sets used for search. Rotated per run to avoid pattern detection.
 Add or remove keywords here to tune what the system searches for.
+
+---
+
+## Browser Engine: Playwright vs Browser-Use
+
+Set via `BROWSER_ENGINE` in `.env` or `browser.engine` in `config.yaml`.
+
+| | **playwright** (default) | **browser-use** |
+|---|---|---|
+| **How it works** | Direct CSS selectors per platform | LLM reads pages, decides what to click |
+| **LLM tokens for control** | Zero — LLM only for reply generation | Every page action burns tokens |
+| **Cost** | Free (just the reply LLM call) | ~$0.05–0.50 per task depending on model |
+| **Reliability** | Breaks if platform changes its HTML | Adapts to UI changes automatically |
+| **Anti-bot** | Needs manual stealth (user-agent, delays) | Cloud mode has built-in stealth |
+| **Login handling** | Same persistent profiles | Same persistent profiles |
+| **Speed** | Fast (direct DOM manipulation) | Slower (LLM thinks between actions) |
+
+### Switching
+
+```bash
+# .env
+BROWSER_ENGINE=playwright    # free, fast, direct selectors
+BROWSER_ENGINE=browser-use   # LLM-driven, adapts to UI changes
+```
+
+Both engines share the same persistent browser profiles in `data/profiles/`,
+so logins work regardless of which engine you use.
+
+### Playwright selector maintenance
+
+If a platform redesigns its UI, the CSS selectors in
+`src/playwright_engine.py` → `PLATFORM_CONFIGS` may need updating.
+Check the logs for `Playwright reply failed` or `Playwright search failed`
+to identify broken selectors.
 
 ---
 
@@ -153,7 +188,8 @@ proiaq-monitor/
 │   ├── logging_config.py     # Structured logging (loguru + rotation)
 │   ├── state.py              # SQLite persistent state (no duplicate replies)
 │   ├── llm.py                # Reply generator + full bilingual knowledge base
-│   ├── browser.py            # Browser-use wrapper (local + cloud)
+│   ├── browser.py            # Browser-use wrapper + unified dispatch
+│   ├── playwright_engine.py   # Raw Playwright engine (free, CSS selectors)
 │   ├── orchestrator.py       # Core loop: search → filter → reply → post
 │   ├── scheduler.py          # APScheduler + error recovery + notifications
 │   └── platforms/

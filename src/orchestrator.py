@@ -9,7 +9,7 @@ from typing import Any
 
 from loguru import logger
 
-from src.browser import BrowserConfig, BrowserUseClient, run_browser_task
+from src.browser import BrowserConfig, search_platform, post_reply_engine
 from src.llm import PostContext, ReplyGenerator
 from src.platforms.base import PlatformConfig
 from src.platforms.youtube import YouTubePlatform
@@ -48,6 +48,7 @@ class Orchestrator:
     def _build_browser_config(self) -> BrowserConfig:
         bc = self.config.get("browser", {})
         return BrowserConfig(
+            engine=bc.get("engine", "browser-use"),
             mode=bc.get("mode", "local"),
             headed=bc.get("headed", False),
             profile_dir=bc.get("profile_dir", "./data/profiles"),
@@ -165,22 +166,27 @@ class Orchestrator:
         all_posts = []
 
         for keyword in keywords:
-            task = platform.search_task(keyword, max_posts, max_age_hours)
             logger.debug(f"  Search task for '{keyword}' on {platform.name}")
 
             try:
                 raw_result = asyncio.run(
-                    run_browser_task(
-                        task=task,
-                        config=self.browser_config,
+                    search_platform(
                         platform=platform.name,
+                        keyword=keyword,
+                        config=self.browser_config,
+                        max_posts=max_posts,
+                        max_age_hours=max_age_hours,
                         llm_api_key=llm_cfg.get("api_key", ""),
                         llm_base_url=llm_cfg.get("base_url", ""),
                         llm_model=llm_cfg.get("model", ""),
                     )
                 )
-                parsed = self._parse_search_result(raw_result, platform.name)
-                all_posts.extend(parsed)
+                # search_platform already returns parsed list[dict]
+                if isinstance(raw_result, list):
+                    all_posts.extend(raw_result)
+                else:
+                    parsed = self._parse_search_result(str(raw_result), platform.name)
+                    all_posts.extend(parsed)
             except Exception as e:
                 logger.warning(f"  Search failed for keyword '{keyword}': {e}")
                 continue
@@ -307,13 +313,13 @@ class Orchestrator:
                 )
                 return "replied"
 
-            # Post the reply via browser-use
-            reply_task = platform.reply_task(url, reply_text)
+            # Post the reply via the selected engine
             result = asyncio.run(
-                run_browser_task(
-                    task=reply_task,
-                    config=self.browser_config,
+                post_reply_engine(
                     platform=platform.name,
+                    post_url=url,
+                    reply_text=reply_text,
+                    config=self.browser_config,
                     llm_api_key=self.config.get("llm", {}).get("api_key", ""),
                     llm_base_url=self.config.get("llm", {}).get("base_url", ""),
                     llm_model=self.config.get("llm", {}).get("model", ""),

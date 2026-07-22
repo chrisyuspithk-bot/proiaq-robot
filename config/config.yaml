@@ -42,7 +42,8 @@ limits:
   post_max_age_days: 7
 
 browser:
-  mode: local           # local | cloud
+  engine: playwright     # "browser-use" or "playwright"
+  mode: local            # "local" or "cloud" (browser-use only)
   headed: false
   profile_dir: "./data/profiles"
   default_timeout: 30   # seconds
