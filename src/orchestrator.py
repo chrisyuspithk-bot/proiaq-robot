@@ -45,10 +45,17 @@ class Orchestrator:
         self.reply_gen = self._build_reply_generator()
         self.enabled_platforms = self._init_platforms()
 
+        logger.info(
+            f"Orchestrator ready: engine={self.browser_config.engine}, "
+            f"dry_run={config.get('dry_run', False)}, "
+            f"platforms={list(self.enabled_platforms.keys())}"
+        )
+
     def _build_browser_config(self) -> BrowserConfig:
         bc = self.config.get("browser", {})
+        engine = bc.get("engine") or "playwright"
         return BrowserConfig(
-            engine=bc.get("engine", "browser-use"),
+            engine=engine,
             mode=bc.get("mode", "local"),
             headed=bc.get("headed", False),
             profile_dir=bc.get("profile_dir", "./data/profiles"),

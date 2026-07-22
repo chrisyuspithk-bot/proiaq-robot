@@ -77,9 +77,9 @@ def _merge_env_overrides(config: dict) -> dict:
             config[section] = {}
         if isinstance(vals, dict):
             for k, v in vals.items():
-                if v is not None:
+                if v is not None and v != "":
                     config[section][k] = v
-        elif vals is not None:
+        elif vals is not None and vals != "":
             config[section] = vals
     return config
 
