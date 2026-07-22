@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-One-time browser profile setup script.
+One-time browser profile setup script — uses raw Playwright, no API keys needed.
 
 Run this ONCE per platform to log in manually. The browser will open in headed mode.
 After you log in, close the browser. The session cookies are persisted in
@@ -29,11 +29,11 @@ PLATFORM_LOGIN_URLS = {
 
 
 async def setup_profile(platform: str, profile_dir: str = "./data/profiles"):
-    """Open a browser for manual login, persist the profile."""
+    """Open a browser for manual login using raw Playwright, persist the profile."""
     try:
-        from browser_use import Agent, Browser
+        from playwright.async_api import async_playwright
     except ImportError:
-        print("browser-use not installed. Run: pip install browser-use")
+        print("playwright not installed. Run: pip install playwright && playwright install chromium")
         sys.exit(1)
 
     url = PLATFORM_LOGIN_URLS.get(platform)
@@ -50,29 +50,26 @@ async def setup_profile(platform: str, profile_dir: str = "./data/profiles"):
     print(f"Profile directory: {profile_path}")
     print(f"Login URL: {url}")
     print(f"{'='*60}")
-    print("\n1. A browser window will open.")
+    print("\n1. A browser window will open to the login page.")
     print("2. Log in to your account manually.")
-    print("3. After successful login, CLOSE THE BROWSER WINDOW.")
-    print("4. The session will be saved automatically.")
-    print("\nPress Enter to continue...")
-    input()
+    print("3. After successful login, PRESS ENTER in this terminal.")
+    print("   (or just close the browser — cookies are saved automatically)")
+    print()
 
-    browser = Browser(
-        headless=False,
-        user_data_dir=profile_path,
-        keep_alive=True,
-    )
-
-    try:
-        agent = Agent(
-            task=f"Go to {url} and wait for the user to log in. Do nothing else.",
-            browser=browser,
+    async with async_playwright() as p:
+        context = await p.chromium.launch_persistent_context(
+            user_data_dir=profile_path,
+            headless=False,
+            viewport={"width": 1280, "height": 900},
         )
-        await agent.run()
-    except KeyboardInterrupt:
-        print("\nSetup interrupted.")
-    finally:
-        await browser.close()
+        page = context.pages[0] if context.pages else await context.new_page()
+
+        await page.goto(url, wait_until="domcontentloaded")
+
+        print("Browser is open. Log in now, then press Enter here to close...")
+        input()
+
+        await context.close()
 
     print(f"\n✓ Profile saved to: {profile_path}")
     print(f"  You can now run the monitor and it will use this logged-in session.")

@@ -86,6 +86,8 @@ Optional:
 ### 3. Create Browser Profiles (Login Once)
 
 Each platform needs a persistent browser profile so logins survive across runs.
+Uses raw Playwright — **no API key needed**, just `playwright install chromium`.
+
 Run this ONCE per platform:
 
 ```bash
@@ -353,12 +355,12 @@ LLM_MODEL=your-model-name
 
 | Problem | Solution |
 |---------|----------|
-| `browser-use not installed` | `pip install browser-use` |
-| Browser won't start headless | Set `BROWSER_HEADED=true` to debug visually |
-| Login lost between runs | Re-run `scripts/setup_profiles.py` for that platform |
-| LLM returns empty/generic reply | Check API key and model name; try a different model |
+| `browser-use not installed` | Only needed if `BROWSER_ENGINE=browser-use`. Default playwright engine works without it. |
+| Browser won't start | Run `playwright install chromium` to download the browser |
+| Login lost between runs | Re-run `python scripts/setup_profiles.py <platform>` |
+| LLM returns empty/generic reply | Check `LLM_API_KEY` and model name; try a different model |
 | Duplicate replies | The SQLite unique constraint prevents this. Check `data/state.db` |
-| Platform blocks automation | Switch to `BROWSER_USE_MODE=cloud` or increase delays |
+| `BROWSER_USE_API_KEY` error | Switch to `BROWSER_ENGINE=playwright` — no browser-use key needed |
 
 ---
 
