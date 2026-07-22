@@ -361,6 +361,7 @@ LLM_MODEL=your-model-name
 | LLM returns empty/generic reply | Check `LLM_API_KEY` and model name; try a different model |
 | Duplicate replies | The SQLite unique constraint prevents this. Check `data/state.db` |
 | `BROWSER_USE_API_KEY` error | Switch to `BROWSER_ENGINE=playwright` — no browser-use key needed |
+| YouTube/Google blocks login | `pip install playwright-stealth` — included in requirements.txt; strips `navigator.webdriver` and other bot fingerprints |
 
 ---
 

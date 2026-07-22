@@ -61,8 +61,19 @@ async def setup_profile(platform: str, profile_dir: str = "./data/profiles"):
             user_data_dir=profile_path,
             headless=False,
             viewport={"width": 1280, "height": 900},
+            args=[
+                "--disable-blink-features=AutomationControlled",
+            ],
         )
         page = context.pages[0] if context.pages else await context.new_page()
+
+        # Inject stealth to strip bot fingerprints
+        try:
+            from playwright_stealth import Stealth
+            await Stealth().apply_stealth_async(page)
+            print("  ✓ Stealth mode enabled")
+        except ImportError:
+            print("  ⚠ playwright-stealth not installed — bot detection possible")
 
         await page.goto(url, wait_until="domcontentloaded")
 

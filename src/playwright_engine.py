@@ -278,7 +278,18 @@ class PlaywrightEngine:
                 "AppleWebKit/537.36 (KHTML, like Gecko) "
                 "Chrome/131.0.0.0 Safari/537.36"
             ),
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+            ],
         )
+        # Inject stealth to strip bot fingerprints (navigator.webdriver, etc.)
+        page = context.pages[0] if context.pages else await context.new_page()
+        try:
+            from playwright_stealth import Stealth
+            await Stealth().apply_stealth_async(page)
+        except ImportError:
+            logger.warning("playwright-stealth not installed — bot detection possible")
         return context
 
     def _extract_posts(self, page_text: str, max_posts: int) -> list[dict]:
