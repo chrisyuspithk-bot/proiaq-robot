@@ -101,7 +101,7 @@ def _parse_bool(val: str | None) -> bool | None:
 
 def load_config() -> dict[str, Any]:
     """Load and merge configuration from YAML and environment."""
-    with open(DEFAULT_CONFIG) as f:
+    with open(DEFAULT_CONFIG, encoding="utf-8") as f:
         config = yaml.safe_load(f)
     config = _resolve_dict(config)
     config = _merge_env_overrides(config)
@@ -110,5 +110,5 @@ def load_config() -> dict[str, Any]:
 
 def load_keywords() -> dict[str, Any]:
     """Load keyword sets from keywords.yaml."""
-    with open(KEYWORDS_CONFIG) as f:
+    with open(KEYWORDS_CONFIG, encoding="utf-8") as f:
         return yaml.safe_load(f)
