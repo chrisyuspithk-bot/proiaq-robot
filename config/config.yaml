@@ -1,0 +1,68 @@
+# Pro-IAQ Social Media Monitor — Main Configuration
+# Environment variables in .env override these defaults.
+
+platforms:
+  youtube:
+    enabled: true
+    domains: ["youtube.com"]
+    priority: 1
+  facebook:
+    enabled: true
+    domains: ["facebook.com", "www.facebook.com"]
+    priority: 2
+  instagram:
+    enabled: true
+    domains: ["instagram.com"]
+    priority: 3
+  lihkg:
+    enabled: true
+    domains: ["lihkg.com"]
+    priority: 4
+  xiaohongshu:
+    enabled: true
+    domains: ["xiaohongshu.com", "www.xiaohongshu.com"]
+    priority: 5
+  x:
+    enabled: true
+    domains: ["x.com", "twitter.com"]
+    priority: 6
+  linkedin:
+    enabled: true
+    domains: ["linkedin.com", "www.linkedin.com"]
+    priority: 7
+
+scheduler:
+  mode: hourly          # hourly | daily | once
+  hourly_interval: 1    # hours between runs in hourly mode
+  daily_time: "09:00"   # HH:MM for daily mode
+
+limits:
+  max_posts_per_platform: 3
+  post_max_age_hours: 48
+  post_max_age_days: 7
+
+browser:
+  mode: local           # local | cloud
+  headed: false
+  profile_dir: "./data/profiles"
+  default_timeout: 30   # seconds
+  human_delay_min: 1.0  # seconds
+  human_delay_max: 3.0  # seconds
+
+llm:
+  api_key: "${LLM_API_KEY}"
+  base_url: "https://openrouter.ai/api/v1"
+  model: "deepseek/deepseek-chat"
+  temperature: 0.7
+  max_tokens: 600
+
+dry_run: false
+
+database:
+  path: "./data/state.db"
+
+logging:
+  level: "INFO"
+  dir: "./logs"
+  rotation: "10 MB"
+  retention: "30 days"

@@ -1,0 +1,39 @@
+# Bilingual keyword sets for search — rotated per run.
+# The orchestrator picks one set per platform per run.
+
+english:
+  - "Pro-IAQ"
+  - "pro iaq"
+  - "AirProce"
+  - "IAQ Hong Kong"
+  - "formaldehyde removal Hong Kong"
+  - "indoor air quality test HK"
+  - "new flat formaldehyde"
+  - "LUKO dehumidifier"
+  - "Smartvent"
+  - "Virex disinfection"
+  - "STERiZAR"
+  - "air purifier rental HK"
+  - "indoor air quality Hong Kong"
+
+chinese:
+  - "Pro-IAQ"
+  - "專業室內空氣質素"
+  - "除甲醛"
+  - "室內空氣質素檢測"
+  - "甲醛檢測"
+  - "新樓入伙 甲醛"
+  - "回南天 抽濕"
+  - "AirProce"
+  - "LUKO 抽濕"
+  - "Virex"
+  - "光觸媒"
+  - "空氣清新機 租用"
+  - "消毒殺菌 香港"
+  - "室內空氣 質素"
+
+# Known Pro-IAQ accounts to monitor
+known_accounts:
+  instagram: ["@pro.iaq_hk"]
+  facebook: ["ProIAQ", "@ProIAQ", "Pro-IAQ"]
+  youtube: ["Pro-IAQ", "專業室內空氣質素"]

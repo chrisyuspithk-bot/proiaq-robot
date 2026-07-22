@@ -1,0 +1,27 @@
+version: "3.9"
+
+services:
+  proiaq-monitor:
+    build: .
+    container_name: proiaq-monitor
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Persist browser profiles (so logins survive restarts)
+      - ./data/profiles:/app/data/profiles
+      # Persist SQLite state
+      - ./data/state.db:/app/data/state.db
+      # Persist logs
+      - ./logs:/app/logs
+    # For local browser mode, some setups need:
+    # privileged: true
+    # or:
+    # security_opt:
+    #   - seccomp:unconfined
+    environment:
+      - BROWSER_USE_MODE=${BROWSER_USE_MODE:-local}
+      - BROWSER_HEADED=${BROWSER_HEADED:-false}
+      - CHROME_PROFILE_DIR=/app/data/profiles
+      - SQLITE_DB_PATH=/app/data/state.db
+      - LOG_DIR=/app/logs
