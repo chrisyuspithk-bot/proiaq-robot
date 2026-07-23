@@ -282,74 +282,53 @@ class PlaywrightEngine:
 
     async def _fb_comment_flow(self, page, plat: dict, url: str,
                                 url_type: str, reply_text: str) -> bool:
-        """Facebook-specific comment flow, tuned per URL type.
-        Returns True if comment was posted successfully."""
+        """Facebook comment flow — only post on the wall, never reply to
+        a nested comment. Returns True if comment was posted."""
         try:
             if url_type == "photo":
-                # Photo viewer: comment panel on the right side.
-                # Try clicking the comment count / comment icon first
-                try:
-                    await page.click("div[aria-label*='comment' i]", timeout=5000)
-                    await asyncio.sleep(1)
-                except Exception:
-                    pass
-                # Scroll the right panel
                 await page.evaluate("window.scrollBy(0, 300)")
                 await asyncio.sleep(1)
-
             elif url_type == "video":
-                # Video player: comments below the fold
-                # Click "Comment" action button first
-                for sel in [
-                    "div[role='button']:has-text('Comment')",
-                    "span:has-text('Comment')",
-                ]:
-                    try:
-                        btns = page.locator(sel)
-                        count = await btns.count()
-                        for i in range(count):
-                            btn = btns.nth(i)
-                            txt = await btn.inner_text()
-                            if await btn.is_visible() and txt.strip().lower() == "comment":
-                                await btn.click(timeout=3000)
-                                await asyncio.sleep(1)
-                                break
-                    except Exception:
-                        continue
-                # Scroll past the video player
                 await page.evaluate("window.scrollBy(0, 1000)")
                 await asyncio.sleep(1)
-
             else:
-                # Normal post: standard flow
                 await page.evaluate("window.scrollBy(0, 500)")
                 await asyncio.sleep(1)
 
-            # ── Find and fill the comment input ────────────────────
-            # Try multiple selectors that Facebook uses
+            # ── Find the MAIN post comment input (not a nested reply) ──
+            # Facebook's main comment input:
+            #   - aria-label contains "comment" (NOT "reply")
+            #   - contenteditable="true"
+            #   - inside the post's own <form>, not a nested comment thread
             comment_input = None
             for sel in [
-                "div[aria-label*='comment' i]",
-                "div[aria-label*='Comment']",
-                "div[contenteditable='true'][role='textbox']",
-                "form div[contenteditable='true']",
+                "form div[contenteditable='true'][role='textbox']",
+                "div[aria-label*='comment' i][contenteditable='true']",
             ]:
                 try:
-                    el = page.locator(sel).first
-                    if await el.is_visible(timeout=2000):
+                    candidates = page.locator(sel)
+                    count = await candidates.count()
+                    for i in range(count):
+                        el = candidates.nth(i)
+                        if not await el.is_visible(timeout=1500):
+                            continue
+                        aria = (await el.get_attribute("aria-label") or "").lower()
+                        # Skip reply-to-comment inputs
+                        if "reply" in aria:
+                            continue
                         comment_input = el
+                        break
+                    if comment_input:
                         break
                 except Exception:
                     continue
 
             if not comment_input:
-                logger.warning("  FB: could not find comment input")
+                logger.warning("  FB: could not find main comment input")
                 return False
 
             await comment_input.click(timeout=3000)
             await asyncio.sleep(0.5)
-
-            # Clear any placeholder text, then type
             await comment_input.fill("")
             await page.keyboard.type(reply_text, delay=50)
             self._human_delay()
@@ -357,7 +336,7 @@ class PlaywrightEngine:
             await page.keyboard.press("Enter")
             await asyncio.sleep(2)
 
-            logger.success(f"  FB comment posted via [{url_type}] flow")
+            logger.success(f"  FB wall comment posted [{url_type}]")
             return True
 
         except Exception as e:
