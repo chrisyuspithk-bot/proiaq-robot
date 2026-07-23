@@ -42,6 +42,19 @@ HK_CONTEXT_KEYWORDS = [
     "epd", "食環署", "室內空氣質素", "iaq", "甲醛", "除甲醛",
 ]
 
+# Blacklist: never reply to these (competitors, government, hospitals, etc.)
+# Matched case-insensitive against author name and post URL
+DO_NOT_REPLY = [
+    # Competitors / other IAQ companies
+    "airproce", "aeris", "virex", "sterizar",
+    "iaq",  # generic IAQ companies (not Pro-IAQ)
+    # Government
+    "epd", "fehd", "hospital", "醫院", "clinic",
+    "衛生署", "環保署", "政府", "gov",
+    # Avoid replying to yourself
+    "pro-iaq", "proiaq", "專業室內空氣質素",
+]
+
 
 class Orchestrator:
     """Main orchestrator that runs the full monitoring + reply pipeline."""
@@ -337,6 +350,12 @@ class Orchestrator:
             self.state.mark_skipped(platform.name, post_id, url, "not HK context")
             return "skipped"
 
+        # ── Competitor / government check ─────────────────────────
+        if self._is_blacklisted(author, url):
+            logger.info(f"  Skipping blacklisted author: {author}")
+            self.state.mark_skipped(platform.name, post_id, url, f"blacklisted: {author}")
+            return "skipped"
+
         # Dedup check
         if self.state.is_already_replied(platform.name, post_id):
             logger.debug(f"  Already processed: {post_id}")
@@ -411,6 +430,17 @@ class Orchestrator:
 
         combined = (post_text + " " + author).lower()
         for kw in HK_CONTEXT_KEYWORDS:
+            if kw.lower() in combined:
+                return True
+        return False
+
+    @staticmethod
+    def _is_blacklisted(author: str, url: str = "") -> bool:
+        """Check if the author/page is a competitor or government org.
+        Only checks author and URL — NOT post content.
+        Case-insensitive."""
+        combined = (author + " " + url).lower()
+        for kw in DO_NOT_REPLY:
             if kw.lower() in combined:
                 return True
         return False
