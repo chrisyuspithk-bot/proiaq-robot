@@ -22,8 +22,8 @@ class BrowserConfig:
     headed: bool = False
     profile_dir: str = "./data/profiles"
     default_timeout: int = 30
-    human_delay_min: float = 1.0
-    human_delay_max: float = 3.0
+    human_delay_min: float = 2.0
+    human_delay_max: float = 5.0
     api_key: str = ""             # Browser Use Cloud API key
 
 

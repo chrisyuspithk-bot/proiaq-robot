@@ -138,6 +138,13 @@ class PlaywrightEngine:
         time.sleep(random.uniform(
             self.config.human_delay_min, self.config.human_delay_max))
 
+    async def _human_scroll(self, page, steps: int = 3) -> None:
+        """Scroll in small, random increments like a human reading."""
+        for _ in range(steps):
+            px = random.randint(80, 250)
+            await page.evaluate(f"window.scrollBy(0, {px})")
+            await asyncio.sleep(random.uniform(0.4, 1.2))
+
     # ── Search ────────────────────────────────────────────────────
 
     async def search(self, platform: str, keyword: str,
@@ -285,21 +292,24 @@ class PlaywrightEngine:
         """Facebook comment flow — only post on the wall, never reply to
         a nested comment. Returns True if comment was posted."""
         try:
+            # ── Warmup: scroll like a human reading the post ──────
+            await self._human_scroll(page, steps=3)
+            self._human_delay()
+
             if url_type == "photo":
                 await page.evaluate("window.scrollBy(0, 300)")
-                await asyncio.sleep(1)
+                await asyncio.sleep(random.uniform(1.5, 3.0))
             elif url_type == "video":
-                await page.evaluate("window.scrollBy(0, 1000)")
-                await asyncio.sleep(1)
+                # Scroll past the video player slowly
+                await page.evaluate("window.scrollBy(0, 400)")
+                await asyncio.sleep(random.uniform(2.0, 4.0))
+                await page.evaluate("window.scrollBy(0, 400)")
+                await asyncio.sleep(random.uniform(2.0, 3.0))
             else:
-                await page.evaluate("window.scrollBy(0, 500)")
-                await asyncio.sleep(1)
+                await page.evaluate("window.scrollBy(0, 300)")
+                await asyncio.sleep(random.uniform(1.5, 3.0))
 
             # ── Find the MAIN post comment input (not a nested reply) ──
-            # Facebook's main comment input:
-            #   - aria-label contains "comment" (NOT "reply")
-            #   - contenteditable="true"
-            #   - inside the post's own <form>, not a nested comment thread
             comment_input = None
             for sel in [
                 "form div[contenteditable='true'][role='textbox']",
@@ -310,10 +320,9 @@ class PlaywrightEngine:
                     count = await candidates.count()
                     for i in range(count):
                         el = candidates.nth(i)
-                        if not await el.is_visible(timeout=1500):
+                        if not await el.is_visible(timeout=2000):
                             continue
                         aria = (await el.get_attribute("aria-label") or "").lower()
-                        # Skip reply-to-comment inputs
                         if "reply" in aria:
                             continue
                         comment_input = el
@@ -327,14 +336,29 @@ class PlaywrightEngine:
                 logger.warning("  FB: could not find main comment input")
                 return False
 
+            # ── Human-like mouse: move toward the input first ─────
+            box = await comment_input.bounding_box()
+            if box:
+                await page.mouse.move(
+                    box["x"] + random.uniform(-20, 20),
+                    box["y"] + random.uniform(-10, 10),
+                )
+                await asyncio.sleep(random.uniform(0.3, 0.8))
+
             await comment_input.click(timeout=3000)
-            await asyncio.sleep(0.5)
+            await asyncio.sleep(random.uniform(0.5, 1.5))
+
+            # Clear placeholder then type with variable speed
             await comment_input.fill("")
-            await page.keyboard.type(reply_text, delay=50)
+            for char in reply_text:
+                await page.keyboard.type(char, delay=random.randint(30, 120))
+                # Occasionally pause mid-typing (like a human thinking)
+                if random.random() < 0.05:
+                    await asyncio.sleep(random.uniform(0.5, 2.0))
             self._human_delay()
 
             await page.keyboard.press("Enter")
-            await asyncio.sleep(2)
+            await asyncio.sleep(random.uniform(2.0, 4.0))
 
             logger.success(f"  FB wall comment posted [{url_type}]")
             return True
