@@ -31,11 +31,8 @@ PLATFORM_CONFIGS = {
     "facebook": {
         "search_url": "https://www.facebook.com/search/posts?q={keyword}",
         "comment_selector": "div[role=article] div[dir=auto]",
-        # Facebook comment flow: click "Comment" link first, then type
         "reply_box_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
         "reply_input_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
-        # fallback if aria-label doesn't match — click the Comment action link
-        "comment_action_selector": "div[role='button']:has-text('Comment'), span:has-text('Comment')",
         "submit_selector": "",  # Enter key
         "scroll_px": 800,  # video posts need more scroll
     },
@@ -212,7 +209,8 @@ class PlaywrightEngine:
         if not plat:
             raise ValueError(f"No selectors for platform: {platform}")
 
-        logger.info(f"Playwright reply: {platform} -> {post_url[:80]}...")
+        url_type = self._detect_url_type(post_url)
+        logger.info(f"Playwright reply: {platform} [{url_type}] -> {post_url[:80]}...")
 
         async with async_playwright() as p:
             context = await self._create_context(p, platform)
@@ -223,32 +221,25 @@ class PlaywrightEngine:
                 await asyncio.sleep(3)  # let JS finish rendering
                 self._human_delay()
 
-                # Platform-specific scroll
+                inp = plat.get("reply_input_selector", "")
+                submit = plat.get("submit_selector", "")
+
+                # ── Platform & URL-type specific approach ──────────
+                if platform == "facebook":
+                    success = await self._fb_comment_flow(
+                        page, plat, post_url, url_type, reply_text
+                    )
+                    if success:
+                        return "success"
+
+                    # If the dedicated flow failed, try generic approach below
+                    logger.info("  FB-specific flow failed, trying generic fallback...")
+
+                # ── Generic flow ────────────────────────────────────
                 scroll_px = plat.get("scroll_px", 500)
                 await page.evaluate(f"window.scrollBy(0, {scroll_px})")
                 await asyncio.sleep(1)
 
-                inp = plat.get("reply_input_selector", "")
-                submit = plat.get("submit_selector", "")
-
-                # ── Facebook-specific: click "Comment" action link first ──
-                if platform == "facebook":
-                    comment_action = plat.get("comment_action_selector", "")
-                    if comment_action:
-                        try:
-                            # Find the "Comment" link near the post (not the page-level one)
-                            comment_btns = page.locator(comment_action)
-                            count = await comment_btns.count()
-                            for i in range(count):
-                                btn = comment_btns.nth(i)
-                                if await btn.is_visible():
-                                    await btn.click(timeout=3000)
-                                    await asyncio.sleep(1)
-                                    break
-                        except Exception:
-                            pass
-
-                # Click the reply box / comment area to activate it
                 box = plat.get("reply_box_selector", "")
                 if box:
                     try:
@@ -257,7 +248,6 @@ class PlaywrightEngine:
                     except Exception:
                         pass
 
-                # Type the reply
                 if inp:
                     try:
                         await page.click(inp, timeout=5000)
@@ -273,7 +263,6 @@ class PlaywrightEngine:
 
                 self._human_delay()
 
-                # Submit
                 if submit:
                     try:
                         await page.click(submit, timeout=5000)
@@ -286,19 +275,123 @@ class PlaywrightEngine:
                 return "success"
 
             except Exception as e:
-                # Save debug screenshot on failure
-                try:
-                    ss_dir = Path(self.config.profile_dir).parent / "logs" / "screenshots"
-                    ss_dir.mkdir(parents=True, exist_ok=True)
-                    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-                    ss_path = ss_dir / f"fail_{platform}_{ts}.png"
-                    await page.screenshot(path=str(ss_path), full_page=True)
-                    logger.error(f"Playwright reply failed: {e}  |  screenshot: {ss_path}")
-                except Exception:
-                    logger.error(f"Playwright reply failed: {e}")
+                await self._save_failure_screenshot(page, platform, post_url, e)
                 return f"error: {e}"
             finally:
                 await context.close()
+
+    async def _fb_comment_flow(self, page, plat: dict, url: str,
+                                url_type: str, reply_text: str) -> bool:
+        """Facebook-specific comment flow, tuned per URL type.
+        Returns True if comment was posted successfully."""
+        try:
+            if url_type == "photo":
+                # Photo viewer: comment panel on the right side.
+                # Try clicking the comment count / comment icon first
+                try:
+                    await page.click("div[aria-label*='comment' i]", timeout=5000)
+                    await asyncio.sleep(1)
+                except Exception:
+                    pass
+                # Scroll the right panel
+                await page.evaluate("window.scrollBy(0, 300)")
+                await asyncio.sleep(1)
+
+            elif url_type == "video":
+                # Video player: comments below the fold
+                # Click "Comment" action button first
+                for sel in [
+                    "div[role='button']:has-text('Comment')",
+                    "span:has-text('Comment')",
+                ]:
+                    try:
+                        btns = page.locator(sel)
+                        count = await btns.count()
+                        for i in range(count):
+                            btn = btns.nth(i)
+                            txt = await btn.inner_text()
+                            if await btn.is_visible() and txt.strip().lower() == "comment":
+                                await btn.click(timeout=3000)
+                                await asyncio.sleep(1)
+                                break
+                    except Exception:
+                        continue
+                # Scroll past the video player
+                await page.evaluate("window.scrollBy(0, 1000)")
+                await asyncio.sleep(1)
+
+            else:
+                # Normal post: standard flow
+                await page.evaluate("window.scrollBy(0, 500)")
+                await asyncio.sleep(1)
+
+            # ── Find and fill the comment input ────────────────────
+            # Try multiple selectors that Facebook uses
+            comment_input = None
+            for sel in [
+                "div[aria-label*='comment' i]",
+                "div[aria-label*='Comment']",
+                "div[contenteditable='true'][role='textbox']",
+                "form div[contenteditable='true']",
+            ]:
+                try:
+                    el = page.locator(sel).first
+                    if await el.is_visible(timeout=2000):
+                        comment_input = el
+                        break
+                except Exception:
+                    continue
+
+            if not comment_input:
+                logger.warning("  FB: could not find comment input")
+                return False
+
+            await comment_input.click(timeout=3000)
+            await asyncio.sleep(0.5)
+
+            # Clear any placeholder text, then type
+            await comment_input.fill("")
+            await page.keyboard.type(reply_text, delay=50)
+            self._human_delay()
+
+            await page.keyboard.press("Enter")
+            await asyncio.sleep(2)
+
+            logger.success(f"  FB comment posted via [{url_type}] flow")
+            return True
+
+        except Exception as e:
+            logger.warning(f"  FB [{url_type}] flow failed: {e}")
+            return False
+
+    @staticmethod
+    def _detect_url_type(url: str) -> str:
+        """Classify a post URL by its structure."""
+        if "/videos/" in url:
+            return "video"
+        if "/photo/" in url or "/photos/" in url:
+            return "photo"
+        if "/posts/" in url or "/pfbid" in url:
+            return "post"
+        if "/reel/" in url:
+            return "reel"
+        return "generic"
+
+    async def _save_failure_screenshot(self, page, platform: str,
+                                        url: str, error: Exception) -> None:
+        """Save a debug screenshot on failure."""
+        try:
+            ss_dir = Path(self.config.profile_dir).parent / "logs" / "screenshots"
+            ss_dir.mkdir(parents=True, exist_ok=True)
+            ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+            url_type = self._detect_url_type(url)
+            ss_path = ss_dir / f"fail_{platform}_{url_type}_{ts}.png"
+            await page.screenshot(path=str(ss_path), full_page=True)
+            logger.error(
+                f"Playwright reply failed [{url_type}]: {error}  |  screenshot: {ss_path}"
+            )
+        except Exception:
+            logger.error(f"Playwright reply failed [{url_type}]: {error}")
 
     # ── Helpers ───────────────────────────────────────────────────
 
