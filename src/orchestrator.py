@@ -151,6 +151,8 @@ class Orchestrator:
             )
             return summary
 
+        replied_urls: list[str] = []
+
         for name, platform in self.enabled_platforms.items():
             logger.info(f"--- Processing platform: {name} (priority={platform.config.priority}) ---")
             platform_result = {
@@ -170,7 +172,7 @@ class Orchestrator:
                 logger.info(f"  Found {len(posts)} posts on {name}")
 
                 for post in posts:
-                    result = self._process_post(post, platform, dry_run)
+                    result = self._process_post(post, platform, dry_run, replied_urls)
                     if result == "replied":
                         platform_result["replied"] += 1
                         summary["replies_posted"] += 1
@@ -184,6 +186,15 @@ class Orchestrator:
 
             summary["platforms_scanned"] += 1
             summary["details"].append(platform_result)
+
+        # ── End-of-run — show all replied URLs ──────────────────
+        if replied_urls:
+            prefix = "[DRY RUN] Would reply to" if dry_run else "REPLIED POSTS — click to verify:"
+            logger.info("=" * 55)
+            logger.info(f"  {prefix}")
+            for url in replied_urls:
+                logger.info(f"    {url}")
+            logger.info("=" * 55)
 
         return summary
 
@@ -296,7 +307,7 @@ class Orchestrator:
         return posts
 
     def _process_post(self, post: dict, platform,
-                      dry_run: bool) -> str:
+                      dry_run: bool, replied_urls: list[str]) -> str:
         """Process a single post: check state, generate reply, optionally post.
 
         Returns: 'replied', 'skipped', or 'error'.
@@ -339,6 +350,7 @@ class Orchestrator:
                 self.state.mark_replied(
                     platform.name, post_id, url, reply_text, status="dry_run"
                 )
+                replied_urls.append(url)
                 return "replied"
 
             # Post the reply via the selected engine
@@ -357,6 +369,7 @@ class Orchestrator:
             if "success" in str(result).lower():
                 self.state.mark_replied(platform.name, post_id, url, reply_text)
                 logger.success(f"  Reply POSTED on {platform.name}: {url}")
+                replied_urls.append(url)
                 return "replied"
             else:
                 self.state.mark_error(platform.name, post_id, url, str(result))
