@@ -32,6 +32,16 @@ PLATFORM_CLASSES = {
     "linkedin": LinkedInPlatform,
 }
 
+# Keywords that indicate a post is relevant to Hong Kong (case-insensitive)
+HK_CONTEXT_KEYWORDS = [
+    "hong kong", "hk", "hongkong", "kowloon", "shatin", "sha tin",
+    "causeway bay", "mong kok", "tsim sha tsui", "central",
+    "香港", "九龍", "沙田", "銅鑼灣", "旺角", "尖沙咀", "中環",
+    "新界", "港島", "觀塘", "荃灣", "元朗", "屯門", "大埔", "西貢",
+    "回南天", "新樓入伙", "科學園",
+    "epd", "食環署", "室內空氣質素", "iaq", "甲醛", "除甲醛",
+]
+
 
 class Orchestrator:
     """Main orchestrator that runs the full monitoring + reply pipeline."""
@@ -314,9 +324,17 @@ class Orchestrator:
         """
         post_id = str(post.get("post_id", ""))
         url = str(post.get("url", ""))
+        post_text = str(post.get("text", ""))
+        author = str(post.get("author", ""))
 
         if not post_id:
             logger.warning("  Skipping post with no post_id")
+            return "skipped"
+
+        # ── HK context check ─────────────────────────────────────
+        if not self._is_hk_context(post_text, author, url):
+            logger.info(f"  Skipping non-HK post: {post_text[:60]}...")
+            self.state.mark_skipped(platform.name, post_id, url, "not HK context")
             return "skipped"
 
         # Dedup check
@@ -380,6 +398,22 @@ class Orchestrator:
             logger.error(f"  Error processing post {post_id}: {e}")
             self.state.mark_error(platform.name, post_id, url, str(e))
             return "error"
+
+    @staticmethod
+    def _is_hk_context(post_text: str, author: str = "", url: str = "") -> bool:
+        """Check if a post is relevant to Hong Kong.
+
+        Matches against HK district names, IAQ terms, and brand keywords.
+        Case-insensitive. LIHKG posts are always considered HK context.
+        """
+        if "lihkg.com" in url:
+            return True
+
+        combined = (post_text + " " + author).lower()
+        for kw in HK_CONTEXT_KEYWORDS:
+            if kw.lower() in combined:
+                return True
+        return False
 
     def get_status(self) -> dict:
         """Get current status for reporting."""
