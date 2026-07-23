@@ -5,6 +5,7 @@ import json
 import random
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from loguru import logger
@@ -76,12 +77,14 @@ class Orchestrator:
         )
 
     def _init_platforms(self) -> dict:
-        """Initialize enabled platform handlers sorted by priority."""
+        """Initialize enabled platform handlers sorted by priority.
+        Skips platforms with no stored browser profile."""
         platforms_cfg = self.config.get("platforms", {})
         limits = self.config.get("limits", {})
         max_posts = limits.get("max_posts_per_platform", 3)
         keywords_en = self.keywords.get("english", [])
         keywords_zh = self.keywords.get("chinese", [])
+        profile_dir = self.browser_config.profile_dir
 
         enabled = {}
         for name, cls in PLATFORM_CLASSES.items():
@@ -89,6 +92,17 @@ class Orchestrator:
             if not pcfg.get("enabled", True):
                 logger.info(f"Platform '{name}' is disabled, skipping")
                 continue
+
+            # Check profile exists (user logged in at least once)
+            profile_path = Path(profile_dir) / name
+            has_profile = profile_path.exists() and any(profile_path.iterdir())
+            if not has_profile:
+                logger.info(
+                    f"Platform '{name}': no profile at {profile_path} — "
+                    f"skipping. Run: python scripts/setup_profiles.py {name}"
+                )
+                continue
+
             platform_config = PlatformConfig(
                 name=name,
                 enabled=True,
@@ -129,6 +143,13 @@ class Orchestrator:
             "errors": 0,
             "details": [],
         }
+
+        if not self.enabled_platforms:
+            logger.warning(
+                "No platforms with profiles found. "
+                "Run setup first: python scripts/setup_profiles.py <platform>"
+            )
+            return summary
 
         for name, platform in self.enabled_platforms.items():
             logger.info(f"--- Processing platform: {name} (priority={platform.config.priority}) ---")
