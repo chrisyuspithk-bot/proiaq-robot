@@ -9,6 +9,7 @@ import json
 import random
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -30,9 +31,13 @@ PLATFORM_CONFIGS = {
     "facebook": {
         "search_url": "https://www.facebook.com/search/posts?q={keyword}",
         "comment_selector": "div[role=article] div[dir=auto]",
+        # Facebook comment flow: click "Comment" link first, then type
         "reply_box_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
         "reply_input_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
-        "submit_selector": "",  # Enter key — more reliable than button
+        # fallback if aria-label doesn't match — click the Comment action link
+        "comment_action_selector": "div[role='button']:has-text('Comment'), span:has-text('Comment')",
+        "submit_selector": "",  # Enter key
+        "scroll_px": 800,  # video posts need more scroll
     },
     "instagram": {
         "search_url": "https://www.instagram.com/explore/search/keyword/?q={keyword}",
@@ -215,18 +220,36 @@ class PlaywrightEngine:
 
             try:
                 await page.goto(post_url, timeout=30000, wait_until="domcontentloaded")
-                await asyncio.sleep(2)
+                await asyncio.sleep(3)  # let JS finish rendering
                 self._human_delay()
 
-                # Scroll down to reveal the comment box
-                await page.evaluate("window.scrollBy(0, 500)")
+                # Platform-specific scroll
+                scroll_px = plat.get("scroll_px", 500)
+                await page.evaluate(f"window.scrollBy(0, {scroll_px})")
                 await asyncio.sleep(1)
 
-                # Click the reply box / comment area to activate it
-                box = plat.get("reply_box_selector", "")
                 inp = plat.get("reply_input_selector", "")
                 submit = plat.get("submit_selector", "")
 
+                # ── Facebook-specific: click "Comment" action link first ──
+                if platform == "facebook":
+                    comment_action = plat.get("comment_action_selector", "")
+                    if comment_action:
+                        try:
+                            # Find the "Comment" link near the post (not the page-level one)
+                            comment_btns = page.locator(comment_action)
+                            count = await comment_btns.count()
+                            for i in range(count):
+                                btn = comment_btns.nth(i)
+                                if await btn.is_visible():
+                                    await btn.click(timeout=3000)
+                                    await asyncio.sleep(1)
+                                    break
+                        except Exception:
+                            pass
+
+                # Click the reply box / comment area to activate it
+                box = plat.get("reply_box_selector", "")
                 if box:
                     try:
                         await page.click(box, timeout=5000)
@@ -234,8 +257,7 @@ class PlaywrightEngine:
                     except Exception:
                         pass
 
-                # Type the reply — keyboard.type works on both inputs
-                # and contenteditable divs (Facebook/LinkedIn)
+                # Type the reply
                 if inp:
                     try:
                         await page.click(inp, timeout=5000)
@@ -264,7 +286,16 @@ class PlaywrightEngine:
                 return "success"
 
             except Exception as e:
-                logger.error(f"Playwright reply failed: {e}")
+                # Save debug screenshot on failure
+                try:
+                    ss_dir = Path(self.config.profile_dir).parent / "logs" / "screenshots"
+                    ss_dir.mkdir(parents=True, exist_ok=True)
+                    ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+                    ss_path = ss_dir / f"fail_{platform}_{ts}.png"
+                    await page.screenshot(path=str(ss_path), full_page=True)
+                    logger.error(f"Playwright reply failed: {e}  |  screenshot: {ss_path}")
+                except Exception:
+                    logger.error(f"Playwright reply failed: {e}")
                 return f"error: {e}"
             finally:
                 await context.close()
