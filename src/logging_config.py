@@ -43,3 +43,16 @@ def setup_logging(log_level: str = "INFO", log_dir: str = "./logs",
         retention=retention,
         compression="gz",
     )
+
+    # Separate log for replies only (easy to grep/copy posted URLs)
+    logger.add(
+        log_path / "replies.log",
+        level="INFO",
+        format="{time:YYYY-MM-DD HH:mm:ss} | {message}",
+        rotation=rotation,
+        retention=retention,
+        filter=lambda record: "REPLIED POSTS" in record["message"]
+        or "Reply POSTED" in record["message"]
+        or "Would post to" in record["message"]
+        or "Would reply to" in record["message"],
+    )
