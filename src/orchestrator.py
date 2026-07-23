@@ -93,12 +93,12 @@ class Orchestrator:
                 logger.info(f"Platform '{name}' is disabled, skipping")
                 continue
 
-            # Check profile exists (user logged in at least once)
+            # Check profile is ready (user logged in successfully)
             profile_path = Path(profile_dir) / name
-            has_profile = profile_path.exists() and any(profile_path.iterdir())
-            if not has_profile:
+            ready_file = profile_path / ".ready"
+            if not ready_file.exists():
                 logger.info(
-                    f"Platform '{name}': no profile at {profile_path} — "
+                    f"Platform '{name}': not ready (no .ready at {profile_path}) — "
                     f"skipping. Run: python scripts/setup_profiles.py {name}"
                 )
                 continue

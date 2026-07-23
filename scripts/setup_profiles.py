@@ -13,6 +13,7 @@ Usage:
 
 import asyncio
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -81,6 +82,10 @@ async def setup_profile(platform: str, profile_dir: str = "./data/profiles"):
         input()
 
         await context.close()
+
+    # Mark this profile as ready (login succeeded)
+    ready_file = Path(profile_path) / ".ready"
+    ready_file.write_text(datetime.now(timezone.utc).isoformat())
 
     print(f"\n✓ Profile saved to: {profile_path}")
     print(f"  You can now run the monitor and it will use this logged-in session.")
