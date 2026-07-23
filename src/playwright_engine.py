@@ -30,9 +30,9 @@ PLATFORM_CONFIGS = {
     "facebook": {
         "search_url": "https://www.facebook.com/search/posts?q={keyword}",
         "comment_selector": "div[role=article] div[dir=auto]",
-        "reply_box_selector": "div[role=textbox]",
-        "reply_input_selector": "div[role=textbox]",
-        "submit_selector": "div[aria-label=Comment]",
+        "reply_box_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
+        "reply_input_selector": "div[aria-label*='comment' i], div[aria-label*='Comment']",
+        "submit_selector": "",  # Enter key — more reliable than button
     },
     "instagram": {
         "search_url": "https://www.instagram.com/explore/search/keyword/?q={keyword}",
@@ -234,12 +234,18 @@ class PlaywrightEngine:
                     except Exception:
                         pass
 
-                # Type the reply
+                # Type the reply — keyboard.type works on both inputs
+                # and contenteditable divs (Facebook/LinkedIn)
                 if inp:
                     try:
-                        await page.fill(inp, reply_text, timeout=5000)
+                        await page.click(inp, timeout=5000)
+                        await asyncio.sleep(0.3)
                     except Exception:
+                        pass
+                    try:
                         await page.keyboard.type(reply_text, delay=50)
+                    except Exception:
+                        await page.fill(inp, reply_text, timeout=5000)
                 else:
                     await page.keyboard.type(reply_text, delay=50)
 
