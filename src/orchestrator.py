@@ -55,6 +55,14 @@ DO_NOT_REPLY = [
     "pro-iaq", "proiaq", "專業室內空氣質素",
 ]
 
+# Competitor brand terms — if the post text is heavily about a competitor
+# (not just a mention), skip it. Case-insensitive.
+COMPETITOR_CONTENT = [
+    "airproce", "aeris", "virex ii", "sterizar",
+    "molekule", "dyson", "blueair", "iqair", "philips",
+    "panasonic", "sharp", "xiaomi", "小米",
+]
+
 
 class Orchestrator:
     """Main orchestrator that runs the full monitoring + reply pipeline."""
@@ -356,6 +364,12 @@ class Orchestrator:
             self.state.mark_skipped(platform.name, post_id, url, f"blacklisted: {author}")
             return "skipped"
 
+        # ── Competitor content check ──────────────────────────────
+        if self._is_competitor_content(post_text):
+            logger.info(f"  Skipping competitor-heavy post: {post_text[:60]}...")
+            self.state.mark_skipped(platform.name, post_id, url, "competitor content")
+            return "skipped"
+
         # Dedup check
         if self.state.is_already_replied(platform.name, post_id):
             logger.debug(f"  Already processed: {post_id}")
@@ -443,6 +457,21 @@ class Orchestrator:
         for kw in DO_NOT_REPLY:
             if kw.lower() in combined:
                 return True
+        return False
+
+    @staticmethod
+    def _is_competitor_content(text: str) -> bool:
+        """Skip posts that are mainly about competitor products.
+        Returns True if 2+ competitor brands appear, or the post is
+        short and all about a competitor (e.g. 'AirProce Vietnam sale!')."""
+        t = text.lower()
+        hits = [kw for kw in COMPETITOR_CONTENT if kw.lower() in t]
+        # 2+ competitor brands → skip
+        if len(hits) >= 2:
+            return True
+        # Single competitor mention but post is short (< 80 chars) → likely ad
+        if len(hits) >= 1 and len(t) < 80:
+            return True
         return False
 
     def get_status(self) -> dict:
