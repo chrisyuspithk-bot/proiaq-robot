@@ -1,55 +1,36 @@
 # Bilingual keyword sets for search — rotated per run.
 # The orchestrator picks one set per platform per run.
-#
-# CRITICAL: Use problem-oriented keywords that real HK users post about.
-# Brand names (AirProce, LUKO, etc.) return competitor pages, not users.
-# Reserve brand names for monitoring own mentions only.
 
 english:
-  # Problem-oriented (what real users post)
+  - "Pro-IAQ"
+  - "pro iaq"
+  - "AirProce"
+  - "IAQ Hong Kong"
   - "formaldehyde removal Hong Kong"
   - "indoor air quality test HK"
   - "new flat formaldehyde"
+  - "LUKO dehumidifier"
+  - "Smartvent"
+  - "Virex disinfection"
+  - "STERiZAR"
   - "air purifier rental HK"
   - "indoor air quality Hong Kong"
-  - "new renovation smell"
-  - "mold problem Hong Kong"
-  - "allergy indoor home"
-  - "air purifier recommend Hong Kong"
-  - "formaldehyde worry new home"
-  - "damp problem HK"
-  - "musty smell home"
-  - "indoor air test"
-  - "home disinfection Hong Kong"
-  # Brand monitoring
-  - "Pro-IAQ"
-  - "pro iaq"
 
 chinese:
-  # Problem-oriented (what real users post)
+  - "Pro-IAQ"
+  - "專業室內空氣質素"
   - "除甲醛"
   - "室內空氣質素檢測"
   - "甲醛檢測"
   - "新樓入伙 甲醛"
   - "回南天 抽濕"
+  - "AirProce"
+  - "LUKO 抽濕"
+  - "Virex"
   - "光觸媒"
   - "空氣清新機 租用"
   - "消毒殺菌 香港"
   - "室內空氣 質素"
-  - "裝修味"
-  - "鼻敏感 家居"
-  - "霉菌 香港"
-  - "潮濕 家居"
-  - "新裝修 甲醛"
-  - "抽濕機 推介"
-  - "空氣清新機 推介"
-  - "入伙 甲醛"
-  - "家居消毒"
-  - "發霉 牆"
-  - "空氣唔好 屋企"
-  # Brand monitoring
-  - "Pro-IAQ"
-  - "專業室內空氣質素"
 
 # Known Pro-IAQ accounts to monitor
 known_accounts:
